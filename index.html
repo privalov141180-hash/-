@@ -81,6 +81,31 @@
   .chip:hover{border-color:var(--accent);color:var(--accent);}
   .chip.active{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);box-shadow:0 0 10px var(--glow);}
 
+  .equip-list{display:flex;flex-direction:column;gap:8px;margin-bottom:24px;}
+  .equip-row{
+    border:1px solid var(--line);background:var(--panel-2);padding:10px 14px;
+    display:flex;align-items:center;flex-wrap:wrap;gap:10px 20px;
+    clip-path:polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);transition:.15s;
+  }
+  .equip-row:hover, .equip-row.active{border-color:var(--accent);}
+  .equip-head{display:flex;align-items:center;gap:12px;cursor:pointer;user-select:none;flex:1 1 220px;font-size:14px;font-weight:500;}
+  .equip-box{width:20px;height:20px;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--accent-ink);flex-shrink:0;}
+  .equip-row.active .equip-box{background:var(--accent);border-color:var(--accent);}
+  .equip-fields{display:flex;flex-wrap:wrap;gap:8px 20px;}
+  .pfield{display:flex;align-items:baseline;gap:8px;font-size:13px;color:var(--ink-soft);}
+  .pfield input{width:80px;}
+  .pfield.wide input{width:160px;}
+  .unit-input{display:flex;align-items:baseline;gap:8px;}
+  .unit-input input{width:120px;}
+  .unit-input span{color:var(--ink-soft);font-size:14px;}
+  .section-title{font-family:'Sora',sans-serif;font-weight:600;font-size:16px;color:var(--ink);margin:30px 0 16px;padding-top:22px;border-top:1px solid var(--line);}
+  .cond-list{margin-bottom:28px;}
+  .cond{margin-bottom:14px;}
+  .cond:last-child{margin-bottom:0;}
+  .cond-t{font-size:14.5px;font-weight:500;color:var(--ink);margin-bottom:3px;}
+  .cond-d{font-size:13.5px;line-height:1.5;color:var(--ink-soft);white-space:pre-line;}
+  .field-row{display:flex;flex-wrap:wrap;gap:16px 48px;margin-bottom:24px;}
+  .field-row .field{margin-bottom:0;}
   .stepper{display:flex;align-items:center;gap:14px;}
   .stepper button{
     width:34px;height:34px;border:1px solid var(--line);background:var(--panel-2);
@@ -119,7 +144,10 @@
     clip-path:polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%);
   }
   .flag{color:var(--accent);font-weight:600;}
-  .copy-row{display:flex;justify-content:flex-end;margin-top:10px;}
+  .copy-row{display:flex;justify-content:flex-end;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;}
+  .btn-outline{background:transparent;color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent);}
+  .btn-outline:hover{box-shadow:inset 0 0 0 1.5px var(--accent), 0 0 14px var(--glow);}
+  a.btn{text-decoration:none;display:inline-block;}
   .copied{font-size:12.5px;color:var(--accent);margin-right:12px;align-self:center;opacity:0;transition:.2s;}
   .copied.show{opacity:1;}
 </style>
@@ -145,31 +173,48 @@
 </div>
 
 <script>
+// Telegram, в который уходят сводки (без @)
+const TG_USERNAME = 'DmitryPrivalov80';
+
 const TOTAL_STEPS = 4; // + result screen
 
+const CONDITIONS = [
+  {t:'Закупки', d:'Закупку черновых материалов осуществляет Исполнитель после утверждения сметы Заказчиком (кабель, автоматы, подрозетники, щит). Закупку чистовых материалов осуществляет Заказчик в соответствии со списком, предоставленным Исполнителем (розетки, выключатели, светильники).'},
+  {t:'График', d:'Шумные работы ведутся строго в соответствии с регламентом ЖК / законодательством РФ. График производства работ предоставляет Исполнитель.'},
+  {t:'Отчётность', d:'До заделки штроб Исполнитель предоставляет подробный отчёт всех трасс с привязкой к размерам как на электронном, так и на бумажном носителе.'},
+  {t:'Сдача работ', d:'Черновой этап сдаётся с подписанием акта и проверкой линий на целостность (прозвонка).'},
+  {t:'Чистота', d:'Все пыльные работы (высверливание, штробление) выполняются с пылесосом. Мусор собирается Исполнителем в мешки.'}
+];
+
 const EQUIP = [
-  {id:'hob',   label:'Варочная панель',          param:'Мощность, кВт', ph:'Например: 7', unit:'кВт',
+  {id:'hob',   label:'Варочная панель', need:'power',
    flag:'Мощность варочной панели — указана в паспорте модели; от неё зависят сечение кабеля и автомат на отдельную линию.'},
   {id:'oven',  label:'Духовой шкаф'},
   {id:'dishwasher', label:'Посудомоечная машина'},
   {id:'washer',label:'Стиральная машина'},
   {id:'dryer', label:'Сушильная машина'},
-  {id:'ac',    label:'Кондиционеры',             param:'Количество, шт.', ph:'Например: 2', unit:'шт.',
+  {id:'ac',    label:'Кондиционеры', powerLabel:'Мощность одного', need:'extra',
+   extra:{label:'Количество', ph:'2', unit:'шт.'},
    flag:'Количество кондиционеров — для каждого нужна своя линия.'},
-  {id:'floor', label:'Электрический тёплый пол', param:'Зоны', ph:'Например: санузел, кухня, коридор', unit:'',
+  {id:'breezer', label:'Бризер', powerLabel:'Мощность одного', need:'extra',
+   extra:{label:'Количество', ph:'2', unit:'шт.'},
+   flag:'Количество бризеров — нужно, чтобы предусмотреть точки подключения.'},
+  {id:'floor', label:'Электрический тёплый пол', need:'extra',
+   extra:{label:'Зоны', ph:'санузел, кухня', unit:''},
    flag:'Зоны тёплого пола и их площадь (м²) — нужны для расчёта мощности и кабеля.'},
+  {id:'towel', label:'Электрический полотенцесушитель'},
   {id:'boiler',label:'Бойлер / водонагреватель'},
-  {id:'flow',  label:'Проточный водонагреватель',param:'Мощность, кВт', ph:'Например: 5', unit:'кВт',
+  {id:'flow',  label:'Проточный водонагреватель', need:'power',
    flag:'Мощность проточного водонагревателя — самая «тяжёлая» нагрузка в квартире, может потребовать отдельного мощного ввода.'}
 ];
 
 const answers = {
-  objectType:null, buildType:null, rooms:2, designProject:null, wallMaterial:[], ceilingType:[],
-  equip:[], params:{},
-  gridType:null, mount:null, housing:null, protect:[],
+  objectType:null, buildType:null, rooms:2, floors:1, area:'', ceilingHeight:'', screed:null, designProject:null, furnBed:'', furnTv:'', furnDesk:'', furnKitchen:'', wallMaterial:[], ceilingType:[],
+  equip:[], params:{}, extras:{},
+  gridType:null, panelType:[], mount:null, panelPlace:null, protect:[], smart:[],
   extraNotes:'',
   grounding:null, groundingValue:'', power:null, powerValue:'',
-  buyer:null, tier:null, deadline:''
+  tier:null, deadline:''
 };
 
 let step = 1; // 1..4, 5 = result
@@ -226,6 +271,37 @@ function textInput(f, key, placeholder, isArea){
   f.appendChild(el);
 }
 
+function unitInput(f, key, placeholder, unit){
+  const wrap = document.createElement('div');
+  wrap.className = 'unit-input';
+  const el = document.createElement('input');
+  el.type = 'text';
+  el.inputMode = 'decimal';
+  el.placeholder = placeholder;
+  el.value = answers[key];
+  el.oninput = () => { answers[key] = el.value; };
+  const u = document.createElement('span');
+  u.textContent = unit;
+  wrap.append(el, u);
+  f.appendChild(wrap);
+}
+
+function paramField(labelText, store, key, ph, unit){
+  const w = document.createElement('div');
+  w.className = 'pfield' + (unit==='' ? ' wide' : '');
+  const l = document.createElement('span');
+  l.textContent = labelText;
+  const el = document.createElement('input');
+  el.type = 'text';
+  if(unit!=='') el.inputMode = 'decimal';
+  el.placeholder = ph || '';
+  el.value = store[key] || '';
+  el.oninput = () => { store[key] = el.value; };
+  w.append(l, el);
+  if(unit){ const u = document.createElement('span'); u.textContent = unit; w.appendChild(u); }
+  return w;
+}
+
 function stepperControl(f, key, min, max){
   const wrap = document.createElement('div');
   wrap.className = 'stepper';
@@ -277,80 +353,160 @@ function render(){
   card.innerHTML = '';
 
   if(step===1){
-    title(card,'Об объекте','Пара общих вопросов, чтобы понимать масштаб.');
+    title(card,'Об объекте','Несколько общих вопросов, чтобы понимать масштаб.');
     let f = field(card,'Что ремонтируете?');
     chipsRow(f,'objectType',[['flat','Квартира'],['house','Частный дом']]);
     f = field(card,'Новостройка или вторичное жильё?');
     chipsRow(f,'buildType',[['new','Новостройка'],['secondary','Вторичное жильё'],['unsure','Не уверен(а)']]);
-    f = field(card,'Сколько комнат?');
+    const dimRow = document.createElement('div');
+    dimRow.className = 'field-row';
+    card.appendChild(dimRow);
+    f = field(dimRow,'Общая площадь');
+    unitInput(f,'area','Например: 74','м²');
+    f = field(dimRow,'Высота потолков');
+    unitInput(f,'ceilingHeight','Например: 2,7','м');
+    const sizeRow = document.createElement('div');
+    sizeRow.className = 'field-row';
+    card.appendChild(sizeRow);
+    f = field(sizeRow,'Сколько комнат?');
     stepperControl(f,'rooms',1,8);
+    f = field(sizeRow,'Сколько этажей?');
+    stepperControl(f,'floors',1,5);
     f = field(card,'Из чего стены?','Можно выбрать несколько — например, несущие стены и перегородки отличаются');
     chipsRow(f,'wallMaterial',[
       ['brick','Кирпич'],['concrete','Бетон / монолит'],['block','Газобетон / пеноблок'],
       ['drywall','Гипсокартон'],['wood','Дерево'],['unknown','Не знаю']
     ], true);
-    f = field(card,'Какой потолок?','Можно выбрать несколько, если в комнатах разные');
+    f = field(card,'Какой планируется потолок?','Можно выбрать несколько, если в комнатах разные');
     chipsRow(f,'ceilingType',[
       ['slab','Голое бетонное перекрытие'],['stretch','Натяжной'],
       ['drywall','Подвесной из гипсокартона'],['wood','Деревянное перекрытие'],['undecided','Ещё не решено']
     ], true);
+    f = field(card,'Имеется ли стяжка?','Выравнивающий слой на полу — в нём обычно прячут часть кабелей');
+    chipsRow(f,'screed',[['yes','Да'],['no','Нет'],['unknown','Не знаю']]);
     f = field(card,'Есть дизайн-проект с расстановкой мебели?');
     chipsRow(f,'designProject',[['yes','Да'],['no','Нет'],['later','Ещё не решено']]);
+    if(answers.designProject==='no' || answers.designProject==='later'){
+      const fh = document.createElement('div');
+      fh.className = 'section-title';
+      fh.textContent = 'Расстановка мебели';
+      card.appendChild(fh);
+      const note = document.createElement('div');
+      note.className = 'field-hint';
+      note.style.marginTop = '-6px';
+      note.style.marginBottom = '18px';
+      note.textContent = 'Без дизайн-проекта по этим ответам электрик наметит розетки и выключатели. Опишите своими словами, например: «кровать в спальне у правой стены от двери». Что ещё не решено — оставьте пустым.';
+      card.appendChild(note);
+      f = field(card,'Где будет кровать (или кровати)?');
+      textInput(f,'furnBed','');
+      f = field(card,'Где будет телевизор или медиазона?');
+      textInput(f,'furnTv','');
+      f = field(card,'Где будет рабочее место?');
+      textInput(f,'furnDesk','');
+      f = field(card,'Как будет расставлена кухня и техника?','Например: «духовка справа от мойки, холодильник у окна»');
+      textInput(f,'furnKitchen','');
+    }
     nav(card, next);
   }
 
   if(step===2){
-    title(card,'Техника','Отметьте, что будет подключаться к электросети. Для некоторых позиций можно сразу указать параметры — если не знаете, оставьте пустым.');
-    let f = field(card,'Какая техника будет в квартире?','Можно выбрать несколько');
-    chipsRow(f,'equip',EQUIP.map(x=>[x.id,x.label]),true);
-    EQUIP.filter(x=>x.param && answers.equip.includes(x.id)).forEach(x=>{
-      const pf = field(card, x.label+' — '+x.param.toLowerCase());
-      const el = document.createElement('input');
-      el.type='text'; el.placeholder=x.ph; el.value=answers.params[x.id]||'';
-      el.oninput=()=>{ answers.params[x.id]=el.value; };
-      pf.appendChild(el);
+    title(card,'Техника','Отметьте, что будет подключаться к электросети, и при желании укажите установленную мощность. Она есть в паспорте или на наклейке на технике — если не знаете, оставьте пустым.');
+    const list = document.createElement('div');
+    list.className = 'equip-list';
+    EQUIP.forEach(x=>{
+      const on = answers.equip.includes(x.id);
+      const row = document.createElement('div');
+      row.className = 'equip-row' + (on ? ' active' : '');
+      const head = document.createElement('div');
+      head.className = 'equip-head';
+      head.onclick = () => {
+        const i = answers.equip.indexOf(x.id);
+        if(i>-1) answers.equip.splice(i,1); else answers.equip.push(x.id);
+        render();
+      };
+      const box = document.createElement('span');
+      box.className = 'equip-box';
+      box.textContent = on ? '✓' : '';
+      const name = document.createElement('span');
+      name.textContent = x.label;
+      head.append(box, name);
+      row.appendChild(head);
+      if(on){
+        const fields = document.createElement('div');
+        fields.className = 'equip-fields';
+        if(x.extra) fields.appendChild(paramField(x.extra.label, answers.extras, x.id, x.extra.ph, x.extra.unit));
+        fields.appendChild(paramField(x.powerLabel || 'Мощность', answers.params, x.id, '', 'кВт'));
+        row.appendChild(fields);
+      }
+      list.appendChild(row);
     });
-    f = field(card,'Есть другие пожелания по электрике?','Необязательно');
+    card.appendChild(list);
+    let f = field(card,'Есть другие пожелания по электрике?','Необязательно');
     textInput(f,'extraNotes','',true);
     nav(card, next);
   }
 
   if(step===3){
-    title(card,'Ввод и электрощит','Параметры питания квартиры и то, как должен выглядеть и что должен уметь щит.');
-    let f = field(card,'Тип сети','Обычно указан в документах на квартиру. В большинстве квартир — однофазная');
+    title(card,'Ввод и электрощит','Параметры питания и то, как должен выглядеть и что должен уметь щит.');
+    let f = field(card,'Тип сети','Обычно указывается в документах. В большинстве квартир - однофазная, в домах трехфазная.');
     chipsRow(f,'gridType',[['single','Однофазная (220 В)'],['three','Трёхфазная (380 В)'],['unknown','Не знаю']]);
-    f = field(card,'Известна выделенная мощность на квартиру?','Обычно есть в документах от застройщика или УК');
+    f = field(card,'Знаете систему заземления в доме?','Если не знаете — ничего страшного, уточним на месте');
+    chipsRow(f,'grounding',[['no','Не знаю'],['yes','Знаю']]);
+    if(answers.grounding==='yes'){
+      textInput(f,'groundingValue','Например: TN-C-S');
+    }
+    f = field(card,'Известна выделенная мощность?','Обычно есть в документах от застройщика или УК');
     chipsRow(f,'power',[['no','Не знаю'],['yes','Знаю']]);
     if(answers.power==='yes'){
       textInput(f,'powerValue','Например: 5 кВт / 15 кВт');
     }
+    f = field(card,'Тип исполнения щита','Силовой щит раздаёт электричество по квартире (розетки, свет, техника), слаботочный собирает в одном месте интернет, ТВ, домофон, охрану и «умный дом», а комбинированный объединяет и то и другое в одном корпусе. Можно выбрать несколько.');
+    chipsRow(f,'panelType',[['power','Силовой'],['low','Слаботочный'],['combined','Комбинированный'],['undecided','Не решено']], true);
     f = field(card,'Монтаж щита');
     chipsRow(f,'mount',[['flush','Встраиваемый (в нишу)'],['surface','Накладной'],['undecided','Не решено']]);
-    f = field(card,'Материал корпуса щита');
-    chipsRow(f,'housing',[['plastic','Пластик'],['metal','Металл'],['undecided','Не решено']]);
+    f = field(card,'Место расположения щита');
+    chipsRow(f,'panelPlace',[['flat','В квартире'],['undecided','Не решено']]);
+    f = field(card,'Какой уровень оборудования интересует?','Без привязки к конкретным брендам');
+    chipsRow(f,'tier',[['econom','Эконом'],['mid','Средний'],['premium','Премиум']]);
     f = field(card,'Защитная автоматика — пожелания к наполнению щита','Можно выбрать несколько');
     chipsRow(f,'protect',[
-      ['surge','Защита от скачков напряжения (реле напряжения)'],
-      ['rcd','Защита от поражения током (УЗО / дифференциальные автоматы)'],
       ['master','Мастер-выключатель (выключение всего света одной кнопкой при уходе)'],
       ['always','Неотключаемые линии (холодильник, защита от протечек, интернет, охрана, видеонаблюдение)'],
       ['arc','Защита от дугового разряда']
+    ], true);
+
+    const sh = document.createElement('div');
+    sh.className = 'section-title';
+    sh.textContent = 'Умный дом';
+    card.appendChild(sh);
+    f = field(card,'Чем должен управляться умный дом?','Можно выбрать несколько. Если умный дом не нужен — оставьте пустым');
+    chipsRow(f,'smart',[
+      ['light','Управление светом и сценариями'],
+      ['climate','Климат (кондиционеры, тёплый пол)'],
+      ['safety','Безопасность (протечки, дым, охрана)'],
+      ['curtains','Шторы и жалюзи']
     ], true);
     nav(card, next);
   }
 
   if(step===4){
-    title(card,'Организационные детали','Последний шаг — и сводка готова.');
-    let f = field(card,'Знаете систему заземления в доме?','Если не знаете — ничего страшного, уточним на месте');
-    chipsRow(f,'grounding',[['no','Не знаю'],['yes','Знаю']]);
-    if(answers.grounding==='yes'){
-      textInput(f,'groundingValue','Например: TN-C-S');
-    }
-    f = field(card,'Кто будет покупать материалы (кабель, автоматы, розетки)?');
-    chipsRow(f,'buyer',[['me','Я сам(а)'],['electrician','Электрик'],['undecided','Ещё не решил(а)']]);
-    f = field(card,'Какой уровень оборудования интересует?','Без привязки к конкретным брендам');
-    chipsRow(f,'tier',[['econom','Эконом'],['mid','Средний'],['premium','Премиум']]);
-    f = field(card,'Есть сроки, к которым нужно успеть?','Необязательно');
+    title(card,'Организационные условия и порядок работ','Как мы работаем — прочитайте условия и ответьте на два последних вопроса.');
+    const conds = document.createElement('div');
+    conds.className = 'cond-list';
+    CONDITIONS.forEach((c,i)=>{
+      const it = document.createElement('div');
+      it.className = 'cond';
+      const t = document.createElement('div');
+      t.className = 'cond-t';
+      t.textContent = c.t;
+      const d = document.createElement('div');
+      d.className = 'cond-d';
+      d.textContent = c.d;
+      it.append(t,d);
+      conds.appendChild(it);
+    });
+    card.appendChild(conds);
+    let f = field(card,'Есть сроки, к которым нужно успеть?','Необязательно');
     textInput(f,'deadline','Например: к марту 2027 или «жёстких сроков нет»');
     nav(card, () => { step=TOTAL_STEPS+1; render(); }, 'Сформировать сводку');
   }
@@ -383,24 +539,41 @@ function renderResult(card){
   txt += `ОБЪЕКТ\n`;
   txt += `Тип: ${answers.objectType==='flat'?'квартира':answers.objectType==='house'?'частный дом':'—'}\n`;
   txt += `Жильё: ${label([['new','новостройка'],['secondary','вторичное'],['unsure','не уточнено']], answers.buildType)}\n`;
+  const fmt = (v,u)=>{ v=(v||'').trim(); if(!v) return '—'; return /^[\d.,\s]+$/.test(v) ? v+' '+u : v; };
+  txt += `Общая площадь: ${fmt(answers.area,'м²')}\n`;
+  txt += `Высота потолков: ${fmt(answers.ceilingHeight,'м')}\n`;
   txt += `Комнат: ${answers.rooms}\n`;
+  txt += `Этажей: ${answers.floors}\n`;
   const wm = answers.wallMaterial.map(v=>label([['brick','кирпич'],['concrete','бетон / монолит'],['block','газобетон / пеноблок'],['drywall','гипсокартон'],['wood','дерево'],['unknown','не известно']], v));
   txt += `Материал стен: ${wm.length?wm.join(', '):'—'}\n`;
   if(answers.wallMaterial.includes('unknown')) flags.push('Материал стен — уточнить на объекте: от него зависят способ штробления и крепёж подрозетников.');
   const ct = answers.ceilingType.map(v=>label([['slab','голое бетонное перекрытие'],['stretch','натяжной'],['drywall','подвесной из гипсокартона'],['wood','деревянное перекрытие'],['undecided','ещё не решено']], v));
   txt += `Потолок: ${ct.length?ct.join(', '):'—'}\n`;
+  txt += `Стяжка: ${label([['yes','есть'],['no','нет'],['unknown','не известно']], answers.screed)}\n`;
   txt += `Дизайн-проект: ${label([['yes','есть'],['no','нет'],['later','пока не решено']], answers.designProject)}\n\n`;
+
+  txt += `РАССТАНОВКА МЕБЕЛИ\n`;
+  if(answers.designProject==='yes'){
+    txt += `по дизайн-проекту\n`;
+  } else {
+    const fl = [['Кровать',answers.furnBed],['ТВ / медиазона',answers.furnTv],['Рабочее место',answers.furnDesk],['Кухня и техника',answers.furnKitchen]].filter(([,v])=>v.trim());
+    if(fl.length) txt += fl.map(([k,v])=>`${k}: ${v.trim()}`).join(`\n`) + `\n`;
+    else { txt += `не указана\n`; flags.push('Расстановка мебели не указана — разметку розеток и выключателей согласовать на объекте до штробления.'); }
+  }
+  txt += `\n`;
 
   txt += `ТЕХНИКА\n`;
   if(!answers.equip.length) txt += `не указана\n`;
+  const fu = (v,u)=>{ v=(v||'').trim(); if(!v) return ''; return u && /^[\d.,\s]+$/.test(v) ? v+' '+u : v; };
   EQUIP.filter(x=>answers.equip.includes(x.id)).forEach(x=>{
-    const v = (answers.params[x.id]||'').trim();
-    let line = `— ${x.label}`;
-    if(x.param){
-      line += ': ' + (v ? (x.unit && /^[\d.,\s]+$/.test(v) ? v+' '+x.unit : v) : 'не указано');
-      if(!v) flags.push(x.flag);
-    }
-    txt += line + `\n`;
+    const pw = fu(answers.params[x.id],'кВт');
+    const ex = x.extra ? fu(answers.extras[x.id], x.extra.unit) : '';
+    const parts = [];
+    if(x.extra && ex) parts.push(x.id==='floor' ? 'зоны: '+ex : ex);
+    if(pw) parts.push((x.powerLabel ? 'мощность одного: ' : 'мощность: ') + pw);
+    if(x.need==='power' && !pw){ parts.push('мощность не указана'); flags.push(x.flag); }
+    if(x.need==='extra' && !ex){ parts.push(x.id==='floor' ? 'зоны не указаны' : 'количество не указано'); flags.push(x.flag); }
+    txt += `— ${x.label}` + (parts.length ? ': ' + parts.join(', ') : '') + `\n`;
   });
   if(answers.extraNotes) txt += `Прочие пожелания: ${answers.extraNotes}\n`;
   txt += `\n`;
@@ -408,24 +581,33 @@ function renderResult(card){
   txt += `ВВОД И ЩИТ\n`;
   txt += `Тип сети: ${label([['single','однофазная (220 В)'],['three','трёхфазная (380 В)'],['unknown','не известен']], answers.gridType)}\n`;
   if(answers.gridType==='unknown' || answers.gridType===null) flags.push('Тип сети (однофазная или трёхфазная) — уточнить по документам на квартиру.');
-  txt += `Выделенная мощность: ${answers.power==='yes' ? answers.powerValue||'указана без деталей' : 'неизвестна'}\n`;
-  if(answers.power!=='yes') flags.push('Выделенная мощность на квартиру — узнать у застройщика/УК. Особенно важно при наличии духовки+варочной панели, бойлера, кондиционера и тёплого пола одновременно.');
-  txt += `Монтаж щита: ${label([['flush','встраиваемый (в нишу)'],['surface','накладной'],['undecided','не решено']], answers.mount)}\n`;
-  txt += `Материал корпуса щита: ${label([['plastic','пластик'],['metal','металл'],['undecided','не решено']], answers.housing)}\n`;
-  const pr = answers.protect.map(v=>label([['surge','защита от скачков напряжения (реле напряжения)'],['rcd','защита от поражения током (УЗО / дифавтоматы)'],['master','мастер-выключатель'],['always','неотключаемые линии (холодильник, защита от протечек, интернет, охрана, видеонаблюдение)'],['arc','защита от дугового разряда']], v));
-  txt += `Защитная автоматика:` + (pr.length ? `\n` + pr.map(x=>`— ${x}`).join(`\n`) : ` не указано`) + `\n\n`;
-
-  txt += `ОРГАНИЗАЦИОННОЕ\n`;
   txt += `Заземление: ${answers.grounding==='yes' ? answers.groundingValue||'указано без деталей' : 'неизвестно — уточнить на объекте'}\n`;
   if(answers.grounding!=='yes') flags.push('Тип системы заземления (TN-C-S/TN-S) — проверить на объекте.');
-  txt += `Закупка материалов: ${label([['me','заказчик'],['electrician','электрик'],['undecided','не решено']], answers.buyer)}\n`;
+  txt += `Выделенная мощность: ${answers.power==='yes' ? answers.powerValue||'указана без деталей' : 'неизвестна'}\n`;
+  if(answers.power!=='yes') flags.push('Выделенная мощность на квартиру — узнать у застройщика/УК. Особенно важно при наличии духовки+варочной панели, бойлера, кондиционера и тёплого пола одновременно.');
+  const pt = answers.panelType.map(v=>label([['power','силовой'],['low','слаботочный'],['combined','комбинированный'],['undecided','не решено']], v));
+  txt += `Тип исполнения щита: ${pt.length ? pt.join(', ') : '—'}\n`;
+  txt += `Монтаж щита: ${label([['flush','встраиваемый (в нишу)'],['surface','накладной'],['undecided','не решено']], answers.mount)}\n`;
+  txt += `Место расположения щита: ${label([['flat','в квартире'],['undecided','не решено']], answers.panelPlace)}\n`;
   txt += `Уровень оборудования: ${label([['econom','эконом'],['mid','средний'],['premium','премиум']], answers.tier)}\n`;
+  const pr = answers.protect.map(v=>label([['master','мастер-выключатель'],['always','неотключаемые линии (холодильник, защита от протечек, интернет, охрана, видеонаблюдение)'],['arc','защита от дугового разряда']], v));
+  txt += `Защитная автоматика:` + (pr.length ? `\n` + pr.map(x=>`— ${x}`).join(`\n`) : ` не указано`) + `\n\n`;
+
+  txt += `УМНЫЙ ДОМ\n`;
+  const sm = answers.smart.map(v=>label([['light','управление светом и сценариями'],['climate','климат (кондиционеры, тёплый пол)'],['safety','безопасность (протечки, дым, охрана)'],['curtains','шторы и жалюзи']], v));
+  txt += sm.length ? sm.map(x=>`— ${x}`).join(`\n`) + `\n\n` : `не указан\n\n`;
+
+  txt += `ОРГАНИЗАЦИОННЫЕ УСЛОВИЯ И ПОРЯДОК РАБОТ\n`;
   if(answers.deadline) txt += `Сроки: ${answers.deadline}\n`;
 
+  const baseTxt = txt;
+  const condTxt = `\n` + CONDITIONS.map(c=>`${c.t}: ${c.d}`).join(`\n`) + `\n`;
+  let flagsTxt = '';
   if(flags.length){
-    txt += `\nНУЖНО УТОЧНИТЬ ПЕРЕД СОСТАВЛЕНИЕМ ТЗ\n`;
-    flags.forEach((f,i)=>{ txt += `${i+1}. ${f}\n`; });
+    flagsTxt = `\nНУЖНО УТОЧНИТЬ ПЕРЕД СОСТАВЛЕНИЕМ ТЗ\n` + flags.map((x,i)=>`${i+1}. ${x}\n`).join('');
   }
+  txt = baseTxt + condTxt + flagsTxt;
+  const tgTxt = baseTxt + flagsTxt; // стандартные условия в Telegram не дублируем
 
   const pre = document.createElement('pre');
   pre.textContent = txt;
@@ -437,7 +619,7 @@ function renderResult(card){
   copiedMsg.className = 'copied';
   copiedMsg.textContent = 'Скопировано';
   const copyBtn = document.createElement('button');
-  copyBtn.className = 'btn btn-primary';
+  copyBtn.className = 'btn btn-outline';
   copyBtn.textContent = 'Скопировать сводку';
   copyBtn.onclick = () => {
     navigator.clipboard.writeText(txt).then(()=>{
@@ -446,6 +628,13 @@ function renderResult(card){
     }).catch(()=>{});
   };
   copyRow.append(copiedMsg, copyBtn);
+  const tg = document.createElement('a');
+  tg.className = 'btn btn-primary';
+  tg.textContent = 'Отправить в Telegram';
+  tg.target = '_blank';
+  tg.rel = 'noopener';
+  tg.href = 'https://t.me/' + TG_USERNAME + '?text=' + encodeURIComponent(('Заявка из конструктора ТЗ\n\n' + tgTxt).slice(0, 3900));
+  copyRow.append(tg);
   card.appendChild(copyRow);
 
   const row = document.createElement('div');
